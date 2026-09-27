@@ -46,7 +46,7 @@ DEFAULT_KEYWORDS = [
     "gouvernance des données",
 ]
 
-MIN_SCORE = 70
+MIN_SCORE = 60
 
 # Intitulés hors cible : postes techniques, conseil, alternance/stage, et
 # DPO/juridique (positionnement du profil, voir data/candidate_profile.json).
