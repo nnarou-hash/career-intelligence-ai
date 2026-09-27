@@ -70,6 +70,11 @@ def send_report(scored_jobs: list[dict]) -> bool:
     n'est pas configuré ou si l'envoi échoue."""
     gmail_address = os.getenv("GMAIL_ADDRESS")
     gmail_app_password = os.getenv("GMAIL_APP_PASSWORD")
+    if gmail_app_password:
+        # Gmail affiche le mot de passe d'application avec des espaces
+        # ("abcd efgh ijkl mnop") pour la lisibilité ; ils doivent être
+        # retirés avant utilisation en SMTP.
+        gmail_app_password = gmail_app_password.replace(" ", "")
 
     if not gmail_address or not gmail_app_password:
         logger.warning(
