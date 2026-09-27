@@ -11,7 +11,7 @@ import os
 
 from sources._apify_client import run_apify_actor
 
-DEFAULT_ACTOR_ID = "misceres/indeed-scraper"
+DEFAULT_ACTOR_ID = "misceres~indeed-scraper"
 
 
 def fetch_jobs(keywords: list[str], location: str = "Île-de-France") -> list[dict]:
@@ -22,6 +22,7 @@ def fetch_jobs(keywords: list[str], location: str = "Île-de-France") -> list[di
     run_input = {
         "position": " OR ".join(keywords),
         "location": location,
+        "country": "FR",
         "maxItems": 50,
     }
 
