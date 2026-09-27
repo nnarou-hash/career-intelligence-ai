@@ -1,5 +1,18 @@
-from models.job_offer import JobOffer
+import logging
 
+from models.job_offer import JobOffer
+from scoring.ai_resilience import compute_ai_resilience
+from scoring.business_fit import compute_business_fit
+from scoring.career_growth import compute_career_growth
+from scoring.package_score import compute_package_score
+from scoring.skills_score import compute_skills_score
+
+logger = logging.getLogger(__name__)
+
+# Bonus historique pour les entreprises réputées bien payer. Conservé tel
+# quel mais non branché dans l'agrégation ci-dessous : les 5 modules déjà
+# sommés totalisent 100 (10+25+15+20+30) ; l'ajouter ferait systématiquement
+# dépasser le score max. À rebrancher explicitement si besoin (cf. CLAUDE.md).
 TOP_PAYING_COMPANIES = [
     # Tech, Data, IA
     "mongodb", "vmware", "oracle", "salesforce", "cisco", "red hat", "adobe",
@@ -49,46 +62,35 @@ def is_top_paying_company(company_name):
     return False
 
 
-def compute_career_score(job: JobOffer):
-    score = 0
-    skills = " ".join(job.skills).lower()
-    title = job.job_title.lower()
-    sector = job.sector.lower()
+def compute_career_score(job: JobOffer, profile: dict) -> dict:
+    """Agrège les 5 modules de scoring (résilience IA, adéquation métier,
+    évolution de carrière, package, compétences) en un score global /100.
 
-    if "governance" in skills:
-        score += 20
-    if "gouvernance" in skills:
-        score += 20
-    if "data management" in skills:
-        score += 15
-    if "gestion des données" in skills:
-        score += 15
-    if "quality" in skills:
-        score += 15
-    if "qualité" in skills:
-        score += 15
-    if "sql" in skills:
-        score += 15
-    if "power bi" in skills:
-        score += 15
-    if "reporting" in skills:
-        score += 10
-    if "coordination" in skills:
-        score += 10
-    if "business intelligence" in skills:
-        score += 10
-    if "manager" in title:
-        score += 5
-    if "officer" in title:
-        score += 5
-    if "banque" in sector:
-        score += 5
-    if "luxe" in sector:
-        score += 5
-    if "transport" in sector:
-        score += 5
+    Retourne le détail complet : {"total": int, "ai_resilience": int,
+    "business_fit": int, "career_growth": int, "package": int, "skills": int}.
+    """
+    sub_scores = {
+        "ai_resilience": compute_ai_resilience(job),
+        "business_fit": compute_business_fit(job, profile),
+        "career_growth": compute_career_growth(job),
+        "package": compute_package_score(job, profile),
+        "skills": compute_skills_score(job, profile),
+    }
 
-    if is_top_paying_company(job.company):
-        score += 15
+    total = sum(sub_scores.values())
 
-    return min(score, 100)
+    if total > 100:
+        logger.warning(
+            "career_score total=%s dépasse 100 pour %s / %s — "
+            "vérifier les bornes des modules de scoring",
+            total, job.company, job.job_title,
+        )
+        total = min(total, 100)
+
+    return {"total": total, **sub_scores}
+
+
+def compute_career_score_value(job: JobOffer, profile: dict) -> int:
+    """Compatibilité : renvoie uniquement le score global (int), pour les
+    appelants (api_server.py, main.py) qui n'ont pas besoin du détail."""
+    return compute_career_score(job, profile)["total"]
