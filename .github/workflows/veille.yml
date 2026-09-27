@@ -1,0 +1,34 @@
+name: Veille emploi
+
+on:
+  schedule:
+    # Tous les samedis à 8h00 UTC (9h/10h heure de Paris selon la saison).
+    - cron: "0 8 * * 6"
+  workflow_dispatch: {}
+
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dépendances
+        run: pip install -r requirements.txt
+
+      - name: Lancer la veille
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_LINKEDIN_ACTOR_ID: ${{ secrets.APIFY_LINKEDIN_ACTOR_ID }}
+          APIFY_INDEED_ACTOR_ID: ${{ secrets.APIFY_INDEED_ACTOR_ID }}
+          FRANCE_TRAVAIL_CLIENT_ID: ${{ secrets.FRANCE_TRAVAIL_CLIENT_ID }}
+          FRANCE_TRAVAIL_CLIENT_SECRET: ${{ secrets.FRANCE_TRAVAIL_CLIENT_SECRET }}
+          GOOGLE_APPLICATION_CREDENTIALS_JSON: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          REPORT_RECIPIENT: ${{ secrets.REPORT_RECIPIENT }}
+        run: python run_veille.py
