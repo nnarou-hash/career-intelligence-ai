@@ -1,0 +1,82 @@
+{
+  "candidate": {
+    "name": "Nelly Narou",
+    "target_salary": 60000,
+    "minimum_salary": 55000,
+    "minimum_bonus": 7000,
+    "contract": "CDI",
+    "preferred_locations": [
+      "Paris",
+      "Île-de-France"
+    ],
+    "remote_days_min": 2
+  },
+
+  "preferred_jobs": [
+    "Data Manager",
+    "Data Officer",
+    "Data Governance",
+    "Référent Data",
+    "Business Intelligence Analyst"
+  ],
+
+  "preferred_sectors": [
+    "Luxe",
+    "Banque",
+    "Transport",
+    "Santé",
+    "Industrie"
+  ],
+
+  "must_have_skills": {
+    "Data Governance": 30,
+    "Data Quality": 30,
+    "Coordination transverse": 25,
+    "SQL": 25,
+    "Power BI": 20,
+    "Business Intelligence": 20,
+    "Analyse de données": 20,
+    "Reporting": 15,
+    "Gestion de projet": 15
+  },
+
+  "nice_to_have_skills": {
+    "RGPD": 15,
+    "Data Lineage": 10,
+    "Data Catalog": 10,
+    "Data Stewardship": 10,
+    "IA Responsible": 10,
+    "Excel": 10,
+    "S&OP": 10,
+    "SAP BI": 5,
+    "SAP IBP": 5,
+    "Python": 5,
+    "Salesforce": 5
+  },
+
+  "experience_keywords": [
+    "Coordination transverse",
+    "Business Intelligence",
+    "Data Governance",
+    "Data Quality",
+    "Reporting",
+    "Gestion de projet",
+    "Animation d'ateliers",
+    "Transformation",
+    "Documentation",
+    "Amélioration continue"
+  ],
+
+  "red_flags": [
+    "Machine Learning",
+    "Deep Learning",
+    "TensorFlow",
+    "PyTorch",
+    "Spark",
+    "Kubernetes",
+    "DevOps",
+    "MLOps",
+    "Data Engineer",
+    "Software Engineer"
+  ]
+}

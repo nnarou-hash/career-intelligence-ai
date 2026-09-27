@@ -1,0 +1,35 @@
+
+Mariya et d’autres membres de votre réseau
+Tout afficher
+À propos de l’offre d’emploi
+Vos atouts
+
+Vous aimez structurer, fiabiliser et valoriser la donnée afin d'en faire un véritable levier de performance pour les métiers. Curieux et rigoureux, vous appréciez évoluer dans des environnements transverses où vous collaborez avec des interlocuteurs variés et accompagnez l'amélioration continue des pratiques. Vous recherchez un poste qui allie gouvernance de la donnée, transformation des processus et accompagnement des équipes.
+
+À propos de l'entité
+
+Le Métier Chaussure est l'un des 16 métiers de la Maison Hermès et l'un des plus importants en termes de volume d'activité. Plus de 300 collaborateurs, répartis entre la France et l'Italie, développent quatre collections par an, distribuées dans plus de 300 magasins à travers le monde ainsi que sur le canal e-commerce.
+
+Au sein du Métier Chaussure, l'équipe Prévisions des ventes & Data, composée de six personnes, recrute un Data Manager H/F afin d'accompagner la gouvernance et la fiabilisation des données produits et métiers.
+
+Vous jouerez un rôle clé dans la qualité et la valorisation des données en intervenant sur l'ensemble de leur cycle de vie. En lien étroit avec les équipes métiers et la MOA, vous contribuerez aux projets de transformation du Métier Chaussure et à l'évolution de ses référentiels, de ses systèmes d'information et de ses outils décisionnels.
+
+Vos missions
+
+Piloter la gouvernance des données de votre périmètre et garantir leur qualité tout au long de leur cycle de vie.
+Cartographier les données métiers, construire le dictionnaire de données et définir les règles de gouvernance (RACI, monitoring de la qualité, mise à disposition des données) en cohérence avec les standards Groupe.
+Définir et piloter la feuille de route de sécurisation des données afin d'en garantir la fiabilité, la cohérence et la pérennité.
+Documenter les indicateurs et les rapports BI, concevoir et faire évoluer les outils de contrôle de la qualité des données.
+Identifier les anomalies, animer les équipes opérationnelles dans leur résolution et suivre les indicateurs de performance associés.
+Piloter les activations d'interfaces et accompagner la montée en autonomie des métiers sur la gestion des données.
+Représenter le Métier Chaussure au sein des comités Data Groupe et relayer les orientations auprès des équipes.
+Contribuer, en lien étroit avec la MOA, aux projets métiers et aux projets de transformation impactant les données, notamment les évolutions PLM, MDM et ERP.
+
+Votre profil
+
+Vous justifiez d'une première expérience en analyse, gestion ou gouvernance des données, idéalement dans un environnement produit ou industriel. Vous maîtrisez les principaux systèmes d'information tels que PLM, ERP ou MDM, ainsi que les outils de Data Visualisation (Power BI) et de traitement de données (SQL, Python, Excel).
+
+Reconnu pour votre rigueur et votre esprit d'analyse, vous savez comprendre les enjeux des métiers, structurer les besoins et faire avancer des sujets transverses. Vous appréciez animer des interlocuteurs variés, porter des sujets de gouvernance et accompagner les équipes dans l'amélioration de leurs pratiques. Votre autonomie, votre sens de l'organisation et votre capacité à être force de proposition vous permettront de contribuer durablement aux ambitions de transformation du Métier Chaussure.
+
+
+3378,99 euros - 

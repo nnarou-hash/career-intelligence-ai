@@ -1,0 +1,169 @@
+{
+  "identite": {
+    "nom": "Nelly Narou",
+    "titre": "Data Governance | Data Quality | Business Intelligence | Chef de Projet Data",
+    "localisation": "Drancy (93)",
+    "email": "Nelly.narou@gmail.com",
+    "telephone": "+33 6 59 07 42 95",
+    "disponibilite": "Octobre 2026"
+  },
+  "profil": "Professionnelle de la Data spécialisée dans la structuration, la qualité et la valorisation des données. Forte d'une expérience en Business Intelligence, animation du processus S&OP et coordination transverse, j'accompagne les métiers dans la fiabilisation des données, la production d'indicateurs de pilotage et l'amélioration continue des processus. Mon parcours s'inscrit aujourd'hui dans une évolution vers les métiers du Data Management et de la gouvernance des données.",
+  "experiences": [
+    {
+      "poste": "Analyste Business Intelligence",
+      "entreprise": "Teva Santé",
+      "lieu": "La Défense",
+      "contrat": "CDI",
+      "periode": "Depuis Sept. 2023",
+      "missions": [
+        "Animer les réunions et le processus S&OP (Sales & Operations Planning) entre 4 équipes métiers",
+        "Assurer la qualité, la cohérence et la fiabilité des données opérationnelles (contrôles, détection d'anomalies, dictionnaire de données)",
+        "Utiliser les outils BI (Power BI, SAP IBP) pour créer des tableaux de bord interactifs et rapports analytiques",
+        "Automatiser la production de reporting pour optimiser le suivi des KPIs",
+        "Fournir des recommandations aux équipes métiers dans le cadre du pilotage S&OP"
+      ],
+      "realisations": [
+        "Création d'un reporting de suivi des ruptures et allocations",
+        "Création d'un bridge d'analyse des écarts de prévisions",
+        "Élaboration et amélioration d'un dictionnaire de données (produits, supply, prévisions) et de la documentation de la maquette de lancement produit"
+      ],
+      "competences_mobilisees": ["Data Quality", "Data Governance", "S&OP", "Power BI", "SAP IBP", "Dictionnaire de données", "Reporting", "Coordination transverse"],
+      "secteur": "Pharma / Santé"
+    },
+    {
+      "poste": "Coordinatrice Commerciale",
+      "entreprise": "Picard",
+      "lieu": "Issy-les-Moulineaux",
+      "contrat": "CDI",
+      "periode": "Nov. 2020 – Sept. 2023",
+      "missions": [
+        "Superviser la gestion des stocks de la cellule Distribution Automatique",
+        "Réaliser le suivi de l'activité (performance produits, coûts logistique et transport)",
+        "Participer au développement de la prestation",
+        "Assurer la gestion de la relation et le suivi de 110 clients"
+      ],
+      "realisations": [
+        "Mise en place du CRM Salesforce",
+        "Implémentation d'une nouvelle zone d'activité",
+        "Organisation d'un salon professionnel",
+        "Mise en place d'un planning de 12 animations par an",
+        "Contribution au projet d'évolution du système de télémétrie"
+      ],
+      "competences_mobilisees": ["Gestion de stocks", "Suivi de performance", "CRM Salesforce", "Relation client", "Coordination"],
+      "secteur": "Retail"
+    },
+    {
+      "poste": "Coordinatrice Business Process Management (VIE)",
+      "entreprise": "Société Générale",
+      "lieu": "Luxembourg",
+      "contrat": "VIE",
+      "periode": "Mai 2018 – Mai 2020",
+      "missions": [
+        "Créer des tableaux de bord pour 6 pays",
+        "Contribuer aux projets stratégiques du service",
+        "Analyser la performance et la productivité de 12 équipes opérationnelles",
+        "Apporter son aide sur le suivi budgétaire des FTE (équivalent temps plein) du service"
+      ],
+      "realisations": [
+        "Analyse de 100 contrats clients dans le cadre d'un projet de transformation",
+        "Réalisation d'une cartographie des systèmes de paiement"
+      ],
+      "competences_mobilisees": ["Reporting multi-pays", "Analyse de performance", "Suivi budgétaire", "Gestion de projet"],
+      "secteur": "Banque"
+    },
+    {
+      "poste": "Chef de Projet Commercial",
+      "entreprise": "DHL Express",
+      "lieu": "Paris",
+      "contrat": "CDD",
+      "periode": "Sept. 2015 – Sept. 2016",
+      "missions": [
+        "Superviser la partie commerciale de 80 agences opérationnelles",
+        "Former les équipes sur les spécificités des nouveaux produits et outils",
+        "Suivre les projets du périmètre clients sans compte DHL",
+        "Rédiger les procédures et guides de formation"
+      ],
+      "realisations": [
+        "Lancement d'une nouvelle boutique DHL (+5% du chiffre d'affaires)",
+        "Participation à 2 projets groupe (nouvel outil d'encaissement, site d'envoi en ligne)"
+      ],
+      "competences_mobilisees": ["Gestion de projet", "Formation", "Rédaction de procédures", "Pilotage réseau d'agences"],
+      "secteur": "Logistique"
+    },
+    {
+      "poste": "Retail Business Developer",
+      "entreprise": "DHL Express",
+      "lieu": "Paris",
+      "contrat": "Stage puis alternance",
+      "periode": "Janv. 2014 – Sept. 2015",
+      "missions": [
+        "Lancer Academy Express (offre étudiante) : mise en œuvre et suivi des partenariats",
+        "Suivre un projet e-commerce en partenariat avec Vente-Privée",
+        "Préparer les Business Review"
+      ],
+      "realisations": [
+        "Négociation de deux partenariats pour Academy Express",
+        "+45% de ventes online grâce à DHL Academy Express"
+      ],
+      "competences_mobilisees": ["Développement de partenariats", "Gestion de projet e-commerce", "Business Review"],
+      "secteur": "Logistique"
+    }
+  ],
+  "autres_experiences": [
+    {
+      "poste": "Assistante Administrative",
+      "entreprise": "DHL Express",
+      "lieu": "Paris",
+      "periode": "Déc. 2017 – Avril 2018"
+    },
+    {
+      "poste": "Chargée d'Accueil",
+      "entreprise": "LCL",
+      "lieu": "Montreuil",
+      "periode": "Déc. 2011 – Déc. 2013"
+    },
+    {
+      "poste": "Assistante Commerciale",
+      "entreprise": "DHL Express",
+      "lieu": "Paris",
+      "periode": "Mai 2013 – Sept. 2013"
+    }
+  ],
+  "formation": [
+    {
+      "diplome": "Formation en Data Analytics",
+      "etablissement": "Jedha",
+      "lieu": "Paris",
+      "periode": "Fév. 2026 – Juin 2026"
+    },
+    {
+      "diplome": "Mastère Spécialisé Business Development & Clients Grands Comptes",
+      "etablissement": "Neoma Business School",
+      "lieu": "Paris",
+      "periode": "Sept. 2014 – Sept. 2015"
+    },
+    {
+      "diplome": "Master en Commerce International",
+      "etablissement": "Université de Rouen",
+      "periode": "Sept. 2013 – Sept. 2014"
+    }
+  ],
+  "competences_techniques": {
+    "data_management": ["Data Quality", "Data Governance", "Gouvernance des données", "Dictionnaire de données"],
+    "analyse_de_donnees": ["SQL", "Python", "Excel avancé"],
+    "business_intelligence": ["Power BI", "Qlik Sense", "Tableau", "SAP BI"],
+    "supply_chain_gestion_de_projet": ["S&OP", "Prévisions", "SAP IBP", "Amélioration continue", "Coordination transverse"],
+    "ia": ["Prompt Engineering", "agents IA", "automatisation no-code"],
+    "crm": ["Salesforce"]
+  },
+  "certifications_en_cours": [
+    { "nom": "DPO", "organisme": "Légischool" },
+    { "nom": "PRINCE2", "organisme": "QRP International" },
+    { "nom": "Lean Six Sigma Yellow Belt", "organisme": "Cubik" }
+  ],
+  "langues": [
+    { "langue": "Français", "niveau": "Langue maternelle" },
+    { "langue": "Anglais", "niveau": "Courant (2 ans en environnement anglophone)" },
+    { "langue": "Portugais", "niveau": "Intermédiaire (5 ans de cours)" }
+  ]
+}
