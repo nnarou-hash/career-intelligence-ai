@@ -46,7 +46,17 @@ DEFAULT_KEYWORDS = [
     "gouvernance des données",
 ]
 
-MIN_SCORE = 60
+MIN_SCORE = int(os.getenv("MIN_SCORE", 60))
+
+LIEU = os.getenv("LIEU", "Île-de-France")
+
+
+def _keywords_from_env() -> list[str]:
+    raw = os.getenv("MOTS_CLES")
+    if not raw:
+        return DEFAULT_KEYWORDS
+    keywords = [k.strip() for k in raw.split(",") if k.strip()]
+    return keywords or DEFAULT_KEYWORDS
 
 # Intitulés hors cible : postes techniques, conseil, alternance/stage, et
 # DPO/juridique (positionnement du profil, voir data/candidate_profile.json).
@@ -78,14 +88,14 @@ def is_excluded(title: str) -> bool:
     return any(keyword in title_lower for keyword in EXCLUDED_KEYWORDS)
 
 
-def collect_all_jobs(keywords: list[str]) -> list[dict]:
+def collect_all_jobs(keywords: list[str], location: str) -> list[dict]:
     """Interroge chaque source indépendamment ; une source qui échoue ou
     n'est pas configurée est ignorée, sans arrêter les autres."""
     all_jobs = []
 
     sources = (
-        ("Apify LinkedIn", lambda: apify_linkedin.fetch_jobs(keywords)),
-        ("Apify Indeed", lambda: apify_indeed.fetch_jobs(keywords)),
+        ("Apify LinkedIn", lambda: apify_linkedin.fetch_jobs(keywords, location)),
+        ("Apify Indeed", lambda: apify_indeed.fetch_jobs(keywords, location)),
         ("France Travail", lambda: france_travail.fetch_jobs(keywords)),
     )
 
@@ -101,10 +111,10 @@ def collect_all_jobs(keywords: list[str]) -> list[dict]:
 
 
 def run(keywords: list[str] | None = None) -> list[dict]:
-    keywords = keywords or DEFAULT_KEYWORDS
+    keywords = keywords or _keywords_from_env()
     profile = load_candidate_profile()
 
-    raw_jobs = collect_all_jobs(keywords)
+    raw_jobs = collect_all_jobs(keywords, LIEU)
     scored_jobs = []
 
     for raw in raw_jobs:
