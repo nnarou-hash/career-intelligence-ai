@@ -1,17 +1,19 @@
-"""Collecte d'offres LinkedIn via un actor Apify.
+"""Collecte d'offres LinkedIn via l'actor Apify curious_coder~linkedin-jobs-scraper.
 
-ATTENTION : DEFAULT_ACTOR_ID et les noms de champs lus sur `item` sont des
-hypothèses basées sur des actors communautaires courants (ex.
-bebity/linkedin-jobs-scraper) — à vérifier et ajuster selon l'actor
-réellement utilisé sur votre compte Apify, dont le schéma de sortie peut
-différer. Fixez APIFY_LINKEDIN_ACTOR_ID pour surcharger.
+Le schéma d'entrée (keywords/location/limitPerSource) est vérifié contre la
+documentation publique de l'actor : pas d'authentification requise, il
+tourne sur les pages de recherche publiques LinkedIn (pas de cookie de
+session nécessaire). En revanche, les noms de champs lus sur `item` en
+sortie (`descriptionText`, `jobUrl`, etc.) restent une hypothèse à
+confirmer sur un run réel — la doc publique ne détaille que l'entrée.
+Fixez APIFY_LINKEDIN_ACTOR_ID pour changer d'actor.
 """
 
 import os
 
 from sources._apify_client import run_apify_actor
 
-DEFAULT_ACTOR_ID = "bebity/linkedin-jobs-scraper"
+DEFAULT_ACTOR_ID = "curious_coder~linkedin-jobs-scraper"
 
 
 def fetch_jobs(keywords: list[str], location: str = "Île-de-France, France") -> list[dict]:
@@ -20,9 +22,9 @@ def fetch_jobs(keywords: list[str], location: str = "Île-de-France, France") ->
     actor_id = os.getenv("APIFY_LINKEDIN_ACTOR_ID", DEFAULT_ACTOR_ID)
 
     run_input = {
-        "title": " OR ".join(keywords),
+        "keywords": " OR ".join(keywords),
         "location": location,
-        "rows": 50,
+        "limitPerSource": 50,
     }
 
     items = run_apify_actor(actor_id, run_input)
