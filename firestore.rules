@@ -1,0 +1,14 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Lecture publique pour le tableau de bord (public/index.html), aucune
+    // écriture côté client : seul le service account du backend (Admin
+    // SDK, backend/storage/firestore_store.py) écrit, et l'Admin SDK
+    // contourne de toute façon ces règles.
+    match /offres/{offerId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
