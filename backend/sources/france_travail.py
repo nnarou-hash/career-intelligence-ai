@@ -39,6 +39,11 @@ def _get_access_token() -> str | None:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=15,
         )
+        if not response.ok:
+            logger.error(
+                "France Travail: échec OAuth2 (%s) — corps de la réponse : %s",
+                response.status_code, response.text,
+            )
         response.raise_for_status()
         return response.json()["access_token"]
     except requests.RequestException:
@@ -67,6 +72,12 @@ def fetch_jobs(keywords: list[str]) -> list[dict]:
             )
             if response.status_code == 204:
                 continue
+            if not response.ok:
+                logger.error(
+                    "France Travail: échec de la recherche '%s' (%s) — "
+                    "corps de la réponse : %s",
+                    keyword, response.status_code, response.text,
+                )
             response.raise_for_status()
             results = response.json().get("resultats", [])
         except requests.RequestException:
