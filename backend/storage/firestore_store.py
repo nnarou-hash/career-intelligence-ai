@@ -4,6 +4,13 @@ Dédoublonnage : identifiant de document = SHA1(url + titre + entreprise),
 tout en minuscules, pour être stable et insensible à la casse. Une offre
 déjà présente dans Firestore n'est pas ré-écrite.
 
+Champs du document : titre, entreprise, lieu, url, source, salary,
+description (texte brut complet, tronqué si nécessaire, voir
+MAX_DESCRIPTION_BYTES), description_tronquee (bool), date_collecte, et les
+6 champs de score (total_score + les 5 sous-scores). La description brute
+est conservée pour permettre un re-scoring (`rescore`) sans re-collecter
+ni repayer OpenAI.
+
 Authentification via variables d'environnement (jamais en dur) :
 - en local : GOOGLE_APPLICATION_CREDENTIALS = chemin vers un fichier de clé
   de service JSON.
@@ -23,6 +30,10 @@ logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "offres"
 
+# Une marge sous la limite Firestore de 1 MiB par document, pour laisser de
+# la place aux autres champs du même document.
+MAX_DESCRIPTION_BYTES = 900_000
+
 _client = None
 _client_init_attempted = False
 
@@ -31,6 +42,18 @@ def compute_offer_id(url: str, title: str, company: str) -> str:
     """SHA1 stable, insensible à la casse, de url+titre+entreprise."""
     raw = f"{url}{title}{company}".strip().lower()
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
+
+
+def _truncate_description(description: str) -> tuple[str, bool]:
+    """Tronque la description à MAX_DESCRIPTION_BYTES (en octets UTF-8,
+    sans couper un caractère multi-octets en deux). Renvoie (texte,
+    a_ete_tronquee)."""
+    encoded = description.encode("utf-8")
+    if len(encoded) <= MAX_DESCRIPTION_BYTES:
+        return description, False
+
+    truncated = encoded[:MAX_DESCRIPTION_BYTES].decode("utf-8", errors="ignore")
+    return truncated, True
 
 
 def _get_client():
@@ -82,9 +105,9 @@ def offer_exists(offer_id: str) -> bool:
 
 
 def save_offer(job: dict, scores: dict) -> bool:
-    """Enregistre une offre + ses sous-scores dans Firestore sous un id
-    stable (SHA1 url+titre+entreprise). Renvoie False sans erreur si
-    Firestore n'est pas configuré ou si l'offre existe déjà."""
+    """Enregistre une offre + sa description brute + ses sous-scores dans
+    Firestore sous un id stable (SHA1 url+titre+entreprise). Renvoie False
+    sans erreur si Firestore n'est pas configuré ou si l'offre existe déjà."""
     client = _get_client()
     if client is None:
         return False
@@ -98,20 +121,62 @@ def save_offer(job: dict, scores: dict) -> bool:
         logger.info("Offre déjà enregistrée, ignorée: %s", offer_id)
         return False
 
+    description, tronquee = _truncate_description(job.get("description", "") or "")
+    if tronquee:
+        logger.warning(
+            "Description tronquée à %d octets pour %s", MAX_DESCRIPTION_BYTES, offer_id
+        )
+
     doc_ref.set({
-        "company": job["company"],
-        "job_title": job["job_title"],
-        "location": job.get("location", ""),
-        "link": job["link"],
+        "titre": job["job_title"],
+        "entreprise": job["company"],
+        "lieu": job.get("location", ""),
+        "url": job["link"],
         "source": job.get("source", ""),
         "salary": job.get("salary", ""),
+        "description": description,
+        "description_tronquee": tronquee,
         "total_score": scores["total"],
         "ai_resilience": scores["ai_resilience"],
         "business_fit": scores["business_fit"],
         "career_growth": scores["career_growth"],
         "package": scores["package"],
         "skills": scores["skills"],
-        "created_at": firestore.SERVER_TIMESTAMP,
+        "couverture_bi": scores.get("couverture_bi", 0.0),
+        "couverture_gouvernance": scores.get("couverture_gouvernance", 0.0),
+        "date_collecte": firestore.SERVER_TIMESTAMP,
     })
 
+    return True
+
+
+def iter_all_offers():
+    """Générateur (offer_id, doc_dict) sur toute la collection "offres".
+    N'itère rien si Firestore n'est pas configuré."""
+    client = _get_client()
+    if client is None:
+        return
+
+    for doc in client.collection(COLLECTION_NAME).stream():
+        yield doc.id, doc.to_dict()
+
+
+def update_scores(offer_id: str, scores: dict) -> bool:
+    """Met à jour uniquement les champs de score d'un document existant
+    (utilisé par la commande `rescore`), sans toucher aux autres champs.
+    Renvoie False sans erreur si Firestore n'est pas configuré."""
+    client = _get_client()
+    if client is None:
+        return False
+
+    client.collection(COLLECTION_NAME).document(offer_id).update({
+        "total_score": scores["total"],
+        "ai_resilience": scores["ai_resilience"],
+        "business_fit": scores["business_fit"],
+        "career_growth": scores["career_growth"],
+        "package": scores["package"],
+        "skills": scores["skills"],
+        "couverture_bi": scores.get("couverture_bi", 0.0),
+        "couverture_gouvernance": scores.get("couverture_gouvernance", 0.0),
+    })
     return True
