@@ -9,6 +9,10 @@ on:
 jobs:
   veille:
     runs-on: ubuntu-latest
+    # Filet de sécurité : même si un appel externe restait bloqué (Apify,
+    # OpenAI, France Travail), un run planifié ne doit jamais rester
+    # suspendu indéfiniment.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
