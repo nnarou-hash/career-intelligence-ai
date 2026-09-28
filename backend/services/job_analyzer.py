@@ -43,4 +43,8 @@ def analyze_job(job_description: str) -> JobOffer:
         ],
     )
     data = json.loads(response.output_text)
+    # Texte brut conservé pour le scoring (business_fit/skills_score) ; le
+    # LLM n'est pas sollicité pour le reproduire, seulement pour en extraire
+    # les champs structurés ci-dessus.
+    data["description"] = job_description
     return JobOffer(**data)

@@ -10,3 +10,4 @@ class JobOffer(BaseModel):
     experience: str
     skills: List[str]
     salary: Optional[str] = None
+    description: Optional[str] = None
