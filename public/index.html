@@ -70,13 +70,17 @@
           `<tr><td>${label}</td><td>${data[key] ?? "?"}/${max}</td></tr>`
       ).join("");
 
+      const pctBI = Math.round((data.couverture_bi ?? 0) * 100);
+      const pctGouv = Math.round((data.couverture_gouvernance ?? 0) * 100);
+
       return `
         <div class="job-card">
-          <h2>${data.company ?? ""}</h2>
-          <p class="job-title">${data.job_title ?? ""} — ${data.location ?? ""}</p>
+          <h2>${data.entreprise ?? ""}</h2>
+          <p class="job-title">${data.titre ?? ""} — ${data.lieu ?? ""}</p>
           <p class="total-score">${data.total_score ?? "?"}/100</p>
+          <p class="coverage">Couverture BI : ${pctBI}% — Couverture Gouvernance : ${pctGouv}%</p>
           <table class="sub-scores">${subRows}</table>
-          ${data.link ? `<a class="offer-link" href="${data.link}" target="_blank" rel="noopener">Voir l'offre</a>` : ""}
+          ${data.url ? `<a class="offer-link" href="${data.url}" target="_blank" rel="noopener">Voir l'offre</a>` : ""}
         </div>
       `;
     }
