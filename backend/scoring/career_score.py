@@ -5,7 +5,11 @@ from scoring.ai_resilience import compute_ai_resilience
 from scoring.business_fit import compute_business_fit
 from scoring.career_growth import compute_career_growth
 from scoring.package_score import compute_package_score
-from scoring.skills_score import compute_skills_score
+from scoring.skills_score import (
+    compute_skills_score,
+    compute_coverage_bi,
+    compute_coverage_gouvernance,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +91,15 @@ def compute_career_score(job: JobOffer, profile: dict) -> dict:
         )
         total = min(total, 100)
 
-    return {"total": total, **sub_scores}
+    return {
+        "total": total,
+        **sub_scores,
+        # Diagnostic (pas sommé dans le total) : équilibre entre les deux
+        # familles de compétences derrière le score multiplicatif de
+        # skills_score, affiché dans le tableau de bord.
+        "couverture_bi": compute_coverage_bi(job),
+        "couverture_gouvernance": compute_coverage_gouvernance(job),
+    }
 
 
 def compute_career_score_value(job: JobOffer, profile: dict) -> int:
