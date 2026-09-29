@@ -3,6 +3,7 @@ apify_linkedin.py et apify_indeed.py, sans dupliquer la logique d'appel."""
 
 import logging
 import os
+import time
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,41 @@ logger = logging.getLogger(__name__)
 # run comme non terminé et on l'ignore (voir vérification du statut plus
 # bas), sans jamais bloquer tout le pipeline.
 WAIT_DURATION = timedelta(minutes=5)
+
+# Budget global cumulé sur l'ensemble des actors Apify (LinkedIn + Indeed,
+# tous mots-clés confondus) pour un run de run_veille.py. Avec 11 mots-clés
+# x 2 actors x jusqu'à 5min chacun (WAIT_DURATION), le pire cas atteint
+# 110min — plus que le timeout du job GitHub Actions. Au-delà de ce budget,
+# les exécutions Apify restantes sont abandonnées et le run continue avec
+# les autres sources (France Travail) plutôt que de risquer une coupure
+# sans aucun résultat.
+APIFY_BUDGET_SECONDS = int(os.getenv("APIFY_BUDGET_MINUTES", "30")) * 60
+
+_budget_start: float | None = None
+_budget_exhausted_logged = False
+
+
+def _budget_depasse() -> bool:
+    """True si le temps cumulé passé sur les actors Apify dépasse
+    APIFY_BUDGET_SECONDS. Démarre le chrono au premier appel."""
+    global _budget_start, _budget_exhausted_logged
+
+    if _budget_start is None:
+        _budget_start = time.monotonic()
+        return False
+
+    if time.monotonic() - _budget_start < APIFY_BUDGET_SECONDS:
+        return False
+
+    if not _budget_exhausted_logged:
+        logger.error(
+            "Apify: budget global de %d min dépassé — exécutions Apify "
+            "restantes abandonnées, on continue avec les autres sources",
+            APIFY_BUDGET_SECONDS // 60,
+        )
+        _budget_exhausted_logged = True
+
+    return True
 
 
 def _champ(run, *noms):
@@ -40,6 +76,9 @@ def run_apify_actor(actor_id: str, run_input: dict, token_env_var: str = "APIFY_
     token = os.getenv(token_env_var)
     if not token:
         logger.warning("Apify non configuré (%s absent) — source ignorée", token_env_var)
+        return []
+
+    if _budget_depasse():
         return []
 
     try:
