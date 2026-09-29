@@ -1,2 +1,8 @@
 fastapi
 uvicorn
+pydantic
+openai
+python-dotenv
+requests
+apify-client
+google-cloud-firestore

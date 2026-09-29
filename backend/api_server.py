@@ -7,7 +7,8 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from services.job_analyzer import analyze_job
-from scoring.career_score import compute_career_score
+from services.profile_loader import load_candidate_profile
+from scoring.career_score import compute_career_score_value
 
 
 # =========================
@@ -17,6 +18,7 @@ from scoring.career_score import compute_career_score
 load_dotenv()
 
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
+CANDIDATE_PROFILE = load_candidate_profile()
 
 
 # =========================
@@ -309,8 +311,8 @@ def generate_report(
         # SCORE
         # =========================
 
-        score = compute_career_score(
-            offer
+        score = compute_career_score_value(
+            offer, CANDIDATE_PROFILE
         )
 
         # =========================

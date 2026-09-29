@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Career Intelligence AI — Tableau de bord</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px;
+    background: #fafafa;
+    color: #1a1a1a;
+  }
+  h1 { margin-bottom: 4px; }
+  #status { color: #666; margin-bottom: 24px; }
+  .job-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .job-card h2 { margin: 0 0 4px; }
+  .job-title { font-weight: 600; }
+  .total-score { font-size: 1.4em; font-weight: 700; color: #1a7a3a; }
+  table.sub-scores { border-collapse: collapse; width: 100%; margin-top: 12px; }
+  table.sub-scores td { padding: 4px 8px; border-bottom: 1px solid #eee; }
+  a.offer-link { display: inline-block; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <h1>Career Intelligence AI</h1>
+  <p id="status">Chargement des offres…</p>
+  <div id="jobs"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import {
+      getFirestore, collection, getDocs, query, orderBy,
+    } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+    // Config du projet Firebase (Console Firebase > Paramètres du projet >
+    // Vos applications > SDK de configuration). Ce sont des valeurs
+    // publiques côté client, pas des secrets — la sécurité réelle est
+    // assurée par firestore.rules (lecture réservée aux visiteurs
+    // authentifiés via l'auth anonyme ci-dessous, écriture interdite côté
+    // client, seul le service account du backend écrit).
+    const firebaseConfig = {
+      projectId:"career-intelligence-ai-nn",
+      appId:"1:792964192343:web:e264db771431361cf46b12",
+      storageBucket:"career-intelligence-ai-nn.firebasestorage.app",
+      apiKey:"AIzaSyC_iKTvTsqBxChd3y6N3sFEnESESVLGYYU",
+      authDomain:"career-intelligence-ai-nn.firebaseapp.com",
+      messagingSenderId:"792964192343",
+    };
+ 
+
+
+  
+    // Sous-scores affichés triés par poids décroissant.
+    const SUB_SCORE_LABELS = [
+      ["skills", "Compétences", 30],
+      ["business_fit", "Adéquation métier", 25],
+      ["package", "Package", 20],
+      ["career_growth", "Évolution", 15],
+      ["ai_resilience", "Résilience IA", 10],
+    ];
+
+    function renderJob(data) {
+      const subRows = SUB_SCORE_LABELS.map(
+        ([key, label, max]) =>
+          `<tr><td>${label}</td><td>${data[key] ?? "?"}/${max}</td></tr>`
+      ).join("");
+
+      const pctBI = Math.round((data.couverture_bi ?? 0) * 100);
+      const pctGouv = Math.round((data.couverture_gouvernance ?? 0) * 100);
+
+      return `
+        <div class="job-card">
+          <h2>${data.entreprise ?? ""}</h2>
+          <p class="job-title">${data.titre ?? ""} — ${data.lieu ?? ""}</p>
+          <p class="total-score">${data.total_score ?? "?"}/100</p>
+          <p class="coverage">Couverture BI : ${pctBI}% — Couverture Gouvernance : ${pctGouv}%</p>
+          <table class="sub-scores">${subRows}</table>
+          ${data.url ? `<a class="offer-link" href="${data.url}" target="_blank" rel="noopener">Voir l'offre</a>` : ""}
+        </div>
+      `;
+    }
+
+    async function main() {
+      const statusEl = document.getElementById("status");
+      const jobsEl = document.getElementById("jobs");
+
+      try {
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const auth = getAuth(app);
+        await signInAnonymously(auth);
+
+        const offersQuery = query(collection(db, "offres"), orderBy("total_score", "desc"));
+        const snapshot = await getDocs(offersQuery);
+
+        if (snapshot.empty) {
+          statusEl.textContent = "Aucune offre enregistrée pour le moment.";
+          return;
+        }
+
+        jobsEl.innerHTML = snapshot.docs.map((doc) => renderJob(doc.data())).join("");
+        statusEl.textContent = `${snapshot.size} offre(s) trouvée(s).`;
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = "Erreur : " + (error.code || "") + " " + error.message;
+      }
+    }
+
+    main();
+  </script>
+</body>
+</html>

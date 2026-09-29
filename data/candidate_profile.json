@@ -13,11 +13,21 @@
   },
 
   "preferred_jobs": [
-    "Data Manager",
-    "Data Officer",
-    "Data Governance",
-    "Référent Data",
-    "Business Intelligence Analyst"
+    "Data Steward",
+    "Data Quality Analyst",
+    "Data Quality Manager",
+    "Data Management Analyst",
+    "Analyste Data Office",
+    "Responsable référentiels",
+    "Responsable MDM"
+  ],
+
+  "excluded_titles": [
+    "DPO",
+    "Délégué à la protection des données",
+    "Juridique",
+    "Legal",
+    "Avocat"
   ],
 
   "preferred_sectors": [
