@@ -18,6 +18,7 @@ Isolation des erreurs :
 import argparse
 import logging
 import os
+import re
 import statistics
 import sys
 
@@ -97,6 +98,38 @@ EXCLUDED_KEYWORDS = [
 def is_excluded(title: str) -> bool:
     title_lower = title.lower()
     return any(keyword in title_lower for keyword in EXCLUDED_KEYWORDS)
+
+
+# Types de contrat hors cible : uniquement du CDI. On exclut sur détection
+# explicite (CDD, freelance, intérim...) plutôt que d'exiger une mention
+# explicite de "CDI" — la plupart des offres en CDI ne le précisent même
+# pas dans le titre/la description, ce serait trop strict.
+CONTRACT_EXCLUDED_KEYWORDS = [
+    "cdd",
+    "freelance",
+    "intérim",
+    "interim",
+    "portage salarial",
+]
+
+
+def is_wrong_contract(text: str) -> bool:
+    normalized = normalize(text)
+    return any(keyword in normalized for keyword in CONTRACT_EXCLUDED_KEYWORDS)
+
+
+# Île-de-France uniquement : "paris"/"ile de france" en toutes lettres, ou
+# un des 8 départements franciliens (75/77/78/91/92/93/94/95), en tant que
+# token isolé ou en tête d'un code postal à 5 chiffres ("92120 Montrouge").
+# Une localisation vide ou non identifiable ("Non précisée", "France") est
+# considérée hors cible plutôt que retenue par défaut.
+IDF_PATTERN = re.compile(
+    r"\b(paris|ile de france)\b|\b(75|77|78|91|92|93|94|95)\d{0,3}\b"
+)
+
+
+def is_outside_idf(location: str) -> bool:
+    return IDF_PATTERN.search(normalize(location)) is None
 
 
 SOURCE_FETCHERS = {
@@ -230,6 +263,16 @@ def run(
         if is_excluded(job_title):
             continue
 
+        description = raw.get("description", "")
+
+        if is_wrong_contract(job_title + " " + description):
+            continue
+
+        location = offer.location or raw.get("location", "")
+
+        if is_outside_idf(location):
+            continue
+
         link = raw.get("link", "")
         company = offer.company or raw.get("company", "")
 
@@ -247,11 +290,11 @@ def run(
         job = {
             "company": company,
             "job_title": job_title,
-            "location": offer.location or raw.get("location", ""),
+            "location": location,
             "link": link,
             "source": raw.get("source", ""),
             "salary": offer.salary or raw.get("salary", ""),
-            "description": raw.get("description", ""),
+            "description": description,
         }
 
         all_scored.append({"job": job, "scores": scores})
