@@ -56,6 +56,14 @@ DEFAULT_KEYWORDS = [
     "BI",
     "S&OP",
     "prévisions",
+    "market intelligence analyst",
+    "business intelligence analyst",
+    "sales & market analyst",
+    "commercial analyst",
+    "insights & analytics analyst",
+    "market data analyst",
+    "performance analyst",
+    "commercial intelligence analyst",
 ]
 
 MIN_SCORE = int(os.getenv("MIN_SCORE", 60))
@@ -245,8 +253,19 @@ def run(
     all_scored = []
     debug_count = 0
 
+    exclusions = {
+        "sans_description": 0,
+        "analyse_echouee": 0,
+        "titre_exclu": 0,
+        "mauvais_contrat": 0,
+        "hors_idf": 0,
+        "deja_connue": 0,
+        "sous_seuil": 0,
+    }
+
     for raw in raw_jobs:
         if not raw.get("description"):
+            exclusions["sans_description"] += 1
             continue
 
         try:
@@ -256,21 +275,25 @@ def run(
                 "Analyse échouée pour '%s' (%s), offre ignorée",
                 raw.get("job_title"), raw.get("link"),
             )
+            exclusions["analyse_echouee"] += 1
             continue
 
         job_title = offer.job_title or raw.get("job_title", "")
 
         if is_excluded(job_title):
+            exclusions["titre_exclu"] += 1
             continue
 
         description = raw.get("description", "")
 
         if is_wrong_contract(job_title + " " + description):
+            exclusions["mauvais_contrat"] += 1
             continue
 
         location = offer.location or raw.get("location", "")
 
         if is_outside_idf(location):
+            exclusions["hors_idf"] += 1
             continue
 
         link = raw.get("link", "")
@@ -279,6 +302,7 @@ def run(
         offer_id = firestore_store.compute_offer_id(link, job_title, company)
         if firestore_store.offer_exists(offer_id):
             logger.info("Offre déjà connue, non re-signalée: %s", link)
+            exclusions["deja_connue"] += 1
             continue
 
         scores = compute_career_score(offer, profile)
@@ -304,6 +328,8 @@ def run(
 
         if scores["total"] >= MIN_SCORE:
             scored_jobs.append({"job": job, "scores": scores})
+        else:
+            exclusions["sous_seuil"] += 1
 
     scored_jobs.sort(key=lambda entry: entry["scores"]["total"], reverse=True)
 
@@ -316,6 +342,10 @@ def run(
         "Run terminé : %d offre(s) retenue(s) (email) sur %d collectée(s), "
         "%d scorée(s) au total",
         len(scored_jobs), len(raw_jobs), len(all_scored),
+    )
+    logger.info(
+        "Détail des exclusions : %s",
+        ", ".join(f"{motif}={count}" for motif, count in exclusions.items() if count),
     )
 
     return all_scored
