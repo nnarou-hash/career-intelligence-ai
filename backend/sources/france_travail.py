@@ -100,6 +100,9 @@ def fetch_jobs(keywords: list[str]) -> list[dict]:
                 "description": offer.get("description") or "",
                 "link": origine.get("urlOrigine") or "",
                 "salary": salaire.get("libelle") or "",
+                # Code France Travail (CDI, CDD, MIS = intérim, SAI =
+                # saisonnier...), lu par services.prefilter.
+                "contract_type": "alternance" if offer.get("alternance") else (offer.get("typeContrat") or ""),
             })
 
     return jobs

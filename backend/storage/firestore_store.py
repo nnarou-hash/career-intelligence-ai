@@ -17,6 +17,13 @@ Authentification via variables d'environnement (jamais en dur) :
 - en CI : GOOGLE_APPLICATION_CREDENTIALS_JSON = contenu JSON de la clé,
   stocké en GitHub Secret, écrit dans un fichier temporaire ici même.
 
+Collection annexe "offres_vues" : une entrée minimale (url, score, date)
+pour CHAQUE offre scorée, y compris sous MIN_SCORE, qui ne vont pas dans
+"offres" (le tableau de bord affiche toute cette collection). Sert
+uniquement de mémoire au dédoublonnage, pour ne pas repayer chaque semaine
+l'analyse OpenAI des offres faibles. Non lisible côté client (aucune règle
+dans firestore.rules), seul le compte de service y accède.
+
 Si aucune des deux n'est configurée, Firestore est ignoré (mode dégradé) :
 aucune exception n'est levée, les offres sont simplement non enregistrées.
 """
@@ -29,6 +36,7 @@ import tempfile
 logger = logging.getLogger(__name__)
 
 COLLECTION_NAME = "offres"
+SEEN_COLLECTION_NAME = "offres_vues"
 
 # Une marge sous la limite Firestore de 1 MiB par document, pour laisser de
 # la place aux autres champs du même document.
@@ -104,9 +112,50 @@ def offer_exists(offer_id: str) -> bool:
     return client.collection(COLLECTION_NAME).document(offer_id).get().exists
 
 
-def save_offer(job: dict, scores: dict) -> bool:
+def load_known_keys() -> tuple[set[str], set[str]]:
+    """Renvoie (ids, urls) de toutes les offres déjà connues, dans
+    "offres" et "offres_vues", en une seule lecture par collection
+    (projection sur le seul champ url) — au lieu d'un get() par offre.
+    Les urls couvrent les documents plus anciens dont l'id avait été
+    calculé à partir des champs extraits par le LLM. Renvoie deux
+    ensembles vides si Firestore n'est pas configuré (mode dégradé)."""
+    client = _get_client()
+    if client is None:
+        return set(), set()
+
+    ids, urls = set(), set()
+    for name in (COLLECTION_NAME, SEEN_COLLECTION_NAME):
+        for doc in client.collection(name).select(["url"]).stream():
+            ids.add(doc.id)
+            url = (doc.to_dict() or {}).get("url")
+            if url:
+                urls.add(url)
+
+    return ids, urls
+
+
+def mark_seen(offer_id: str, url: str, total_score: int) -> bool:
+    """Mémorise une offre scorée dans "offres_vues" (voir docstring du
+    module). Renvoie False sans erreur si Firestore n'est pas configuré."""
+    client = _get_client()
+    if client is None:
+        return False
+
+    from google.cloud import firestore  # sûr : _get_client() a déjà réussi cet import
+
+    client.collection(SEEN_COLLECTION_NAME).document(offer_id).set({
+        "url": url,
+        "total_score": total_score,
+        "date_collecte": firestore.SERVER_TIMESTAMP,
+    })
+    return True
+
+
+def save_offer(job: dict, scores: dict, offer_id: str | None = None) -> bool:
     """Enregistre une offre + sa description brute + ses sous-scores dans
-    Firestore sous un id stable (SHA1 url+titre+entreprise). Renvoie False
+    Firestore sous un id stable (SHA1 url+titre+entreprise). `offer_id`
+    permet d'imposer l'id calculé en amont sur les champs bruts (voir
+    run_veille.py) ; à défaut, il est calculé sur `job`. Renvoie False
     sans erreur si Firestore n'est pas configuré ou si l'offre existe déjà."""
     client = _get_client()
     if client is None:
@@ -114,7 +163,7 @@ def save_offer(job: dict, scores: dict) -> bool:
 
     from google.cloud import firestore  # sûr : _get_client() a déjà réussi cet import
 
-    offer_id = compute_offer_id(job["link"], job["job_title"], job["company"])
+    offer_id = offer_id or compute_offer_id(job["link"], job["job_title"], job["company"])
     doc_ref = client.collection(COLLECTION_NAME).document(offer_id)
 
     if doc_ref.get().exists:

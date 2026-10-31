@@ -1,9 +1,14 @@
 """Point d'entrée batch de la veille emploi automatisée.
 
-Pipeline : collecte (Apify LinkedIn, Apify Indeed, France Travail) ->
-analyse (services.job_analyzer, réutilisé tel quel) -> scoring
-(scoring.career_score, réutilisé tel quel) -> Firestore (dédoublonnage) ->
-email (notify.email_report).
+Pipeline : collecte en parallèle (Apify LinkedIn, Apify Indeed, France
+Travail) -> pré-filtre déterministe (services.prefilter) -> dédoublonnage
+contre Firestore -> plafond MAX_OFFRES_SCOREES -> analyse
+(services.job_analyzer) + scoring (scoring.career_score) en parallèle sur
+SCORING_WORKERS threads -> Firestore offre par offre -> email
+(notify.email_report).
+
+Aucun appel OpenAI n'est fait avant le pré-filtre et le dédoublonnage : ce
+sont eux qui bornent le coût et la durée du run.
 
 Déclenché par le workflow GitHub Actions `.github/workflows/veille.yml`
 (cron du samedi, ou workflow_dispatch manuel).
@@ -12,15 +17,19 @@ Isolation des erreurs :
 - une source de collecte non configurée ou en échec est ignorée, les
   autres continuent (voir sources/*.py, qui renvoient [] sans exception) ;
 - une offre dont l'analyse LLM échoue est ignorée, le run continue ;
-- une offre déjà connue de Firestore n'est pas re-signalée par email.
+- une offre déjà connue de Firestore n'est ni re-scorée ni re-signalée ;
+- chaque offre est écrite dès qu'elle est scorée : un run interrompu
+  (timeout du workflow) garde tout ce qui a déjà été scoré.
 """
 
 import argparse
+import itertools
 import logging
 import os
-import re
 import statistics
 import sys
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # backend/ n'est pas un package Python (pas de __init__.py) : ses modules
 # s'importent entre eux avec des chemins absolus internes (ex.
@@ -31,6 +40,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bac
 
 from models.job_offer import JobOffer
 from services.job_analyzer import analyze_job
+from services.prefilter import rejection_reason
 from services.profile_loader import load_candidate_profile
 from scoring.career_score import compute_career_score
 from scoring.normalize import normalize
@@ -70,6 +80,13 @@ MIN_SCORE = int(os.getenv("MIN_SCORE", 60))
 
 LIEU = os.getenv("LIEU", "Île-de-France")
 
+# Plafond d'offres envoyées à OpenAI par run (après pré-filtre et
+# dédoublonnage) : borne le coût et la durée même si une source renvoie
+# soudain beaucoup plus d'offres que d'habitude.
+MAX_OFFRES_SCOREES = int(os.getenv("MAX_OFFRES_SCOREES", 150))
+
+SCORING_WORKERS = int(os.getenv("SCORING_WORKERS", 6))
+
 
 def _keywords_from_env() -> list[str]:
     raw = os.getenv("MOTS_CLES")
@@ -108,38 +125,6 @@ def is_excluded(title: str) -> bool:
     return any(keyword in title_lower for keyword in EXCLUDED_KEYWORDS)
 
 
-# Types de contrat hors cible : uniquement du CDI. On exclut sur détection
-# explicite (CDD, freelance, intérim...) plutôt que d'exiger une mention
-# explicite de "CDI" — la plupart des offres en CDI ne le précisent même
-# pas dans le titre/la description, ce serait trop strict.
-CONTRACT_EXCLUDED_KEYWORDS = [
-    "cdd",
-    "freelance",
-    "intérim",
-    "interim",
-    "portage salarial",
-]
-
-
-def is_wrong_contract(text: str) -> bool:
-    normalized = normalize(text)
-    return any(keyword in normalized for keyword in CONTRACT_EXCLUDED_KEYWORDS)
-
-
-# Île-de-France uniquement : "paris"/"ile de france" en toutes lettres, ou
-# un des 8 départements franciliens (75/77/78/91/92/93/94/95), en tant que
-# token isolé ou en tête d'un code postal à 5 chiffres ("92120 Montrouge").
-# Une localisation vide ou non identifiable ("Non précisée", "France") est
-# considérée hors cible plutôt que retenue par défaut.
-IDF_PATTERN = re.compile(
-    r"\b(paris|ile de france)\b|\b(75|77|78|91|92|93|94|95)\d{0,3}\b"
-)
-
-
-def is_outside_idf(location: str) -> bool:
-    return IDF_PATTERN.search(normalize(location)) is None
-
-
 SOURCE_FETCHERS = {
     "linkedin": lambda keywords, location: apify_linkedin.fetch_jobs(keywords, location),
     "indeed": lambda keywords, location: apify_indeed.fetch_jobs(keywords, location),
@@ -150,27 +135,109 @@ SOURCE_FETCHERS = {
 def collect_all_jobs(
     keywords: list[str], location: str, sources: list[str] | None = None
 ) -> list[dict]:
-    """Interroge chaque source indépendamment ; une source qui échoue ou
-    n'est pas configurée est ignorée, sans arrêter les autres. `sources`
-    restreint à un sous-ensemble de SOURCE_FETCHERS (linkedin/indeed/
-    france_travail) ; None = toutes."""
-    active_sources = sources or list(SOURCE_FETCHERS)
-    all_jobs = []
-
-    for name in active_sources:
-        fetch = SOURCE_FETCHERS.get(name)
-        if fetch is None:
+    """Interroge chaque source indépendamment et en parallèle (un thread
+    par source) : un actor Apify lent ne retarde pas France Travail. Une
+    source qui échoue ou n'est pas configurée est ignorée, sans arrêter les
+    autres. `sources` restreint à un sous-ensemble de SOURCE_FETCHERS
+    (linkedin/indeed/france_travail) ; None = toutes. Les offres sont
+    entrelacées source par source (voir _cap_offers)."""
+    active_sources = []
+    for name in sources or list(SOURCE_FETCHERS):
+        if name in SOURCE_FETCHERS:
+            active_sources.append(name)
+        else:
             logger.warning("Source inconnue ignorée : %s", name)
+
+    if not active_sources:
+        return []
+
+    jobs_by_source = {}
+    with ThreadPoolExecutor(max_workers=len(active_sources)) as executor:
+        futures = {
+            executor.submit(SOURCE_FETCHERS[name], keywords, location): name
+            for name in active_sources
+        }
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                jobs = future.result()
+                logger.info("%s: %d offre(s) collectée(s)", name, len(jobs))
+            except Exception:
+                logger.exception("%s: échec de la collecte, source ignorée", name)
+                jobs = []
+            jobs_by_source[name] = jobs
+
+    # Ordre stable (celui de active_sources), entrelacé une offre par
+    # source à tour de rôle : si le plafond MAX_OFFRES_SCOREES coupe la
+    # liste, chaque source reste représentée.
+    ordered = [jobs_by_source[name] for name in active_sources]
+    return [
+        job
+        for group in itertools.zip_longest(*ordered)
+        for job in group
+        if job is not None
+    ]
+
+
+def _select_offers_to_score(raw_jobs: list[dict]) -> list[tuple[str, dict]]:
+    """Pré-filtre, dédoublonne contre Firestore et plafonne les offres
+    brutes, sans aucun appel OpenAI. Renvoie [(offer_id, raw)] dans
+    l'ordre de raw_jobs, et journalise le nombre de rejets par motif.
+
+    L'id est calculé sur les champs bruts (url, titre, entreprise de la
+    source) : il doit être connu avant l'analyse LLM pour éviter de la
+    payer sur une offre déjà vue."""
+    rejected = Counter()
+    known_ids, known_urls = firestore_store.load_known_keys()
+    seen_this_run = set()
+    selected = []
+
+    for raw in raw_jobs:
+        reason = rejection_reason(raw)
+        if reason is None and is_excluded(raw.get("job_title", "")):
+            reason = "intitulé hors cible"
+        if reason:
+            rejected[reason] += 1
             continue
 
-        try:
-            jobs = fetch(keywords, location)
-            logger.info("%s: %d offre(s) collectée(s)", name, len(jobs))
-            all_jobs.extend(jobs)
-        except Exception:
-            logger.exception("%s: échec de la collecte, source ignorée", name)
+        link = raw.get("link", "")
+        offer_id = firestore_store.compute_offer_id(
+            link, raw.get("job_title", ""), raw.get("company", "")
+        )
+        # Une même offre peut remonter de deux mots-clés ou deux sources.
+        if offer_id in seen_this_run or (link and link in seen_this_run):
+            rejected["doublon dans ce run"] += 1
+            continue
+        seen_this_run.update({offer_id, link} - {""})
 
-    return all_jobs
+        if offer_id in known_ids or (link and link in known_urls):
+            rejected["déjà connue (Firestore)"] += 1
+            continue
+
+        selected.append((offer_id, raw))
+
+    for reason, count in rejected.most_common():
+        logger.info("Pré-filtre : %d offre(s) rejetée(s) — %s", count, reason)
+
+    if len(selected) > MAX_OFFRES_SCOREES:
+        logger.warning(
+            "Plafond MAX_OFFRES_SCOREES=%d atteint : %d offre(s) non scorée(s) "
+            "sur ce run (elles le seront au prochain, n'étant pas mémorisées)",
+            MAX_OFFRES_SCOREES, len(selected) - MAX_OFFRES_SCOREES,
+        )
+        selected = selected[:MAX_OFFRES_SCOREES]
+
+    logger.info(
+        "%d offre(s) à scorer sur %d collectée(s)", len(selected), len(raw_jobs)
+    )
+    return selected
+
+
+def _analyze_and_score(raw: dict, profile: dict):
+    """Exécuté dans un worker : appel OpenAI + calcul du score. Aucune
+    écriture Firestore ici (faite dans le thread principal)."""
+    offer = analyze_job(raw["description"])
+    return offer, compute_career_score(offer, profile)
 
 
 def _debug_print(raw: dict, offer, scores: dict, profile: dict) -> None:
@@ -239,7 +306,7 @@ def run(
     store_all: bool = False,
     sources: list[str] | None = None,
 ) -> list[dict]:
-    """store_all=True écrit dans Firestore même les offres sous MIN_SCORE
+    """store_all=True écrit dans "offres" même les offres sous MIN_SCORE
     (utile pour calibrer le barème sur un jeu complet). send_email=False
     désactive l'envoi du rapport (utile pour une collecte de test).
     `sources` restreint aux sources actives (linkedin/indeed/
@@ -249,87 +316,74 @@ def run(
     profile = load_candidate_profile()
 
     raw_jobs = collect_all_jobs(keywords, LIEU, sources)
+    to_score = _select_offers_to_score(raw_jobs)
     scored_jobs = []
     all_scored = []
     debug_count = 0
+    # Exclusions après analyse LLM (celles d'avant sont journalisées par
+    # _select_offers_to_score).
+    exclusions = Counter()
 
-    exclusions = {
-        "sans_description": 0,
-        "analyse_echouee": 0,
-        "titre_exclu": 0,
-        "mauvais_contrat": 0,
-        "hors_idf": 0,
-        "deja_connue": 0,
-        "sous_seuil": 0,
-    }
-
-    for raw in raw_jobs:
-        if not raw.get("description"):
-            exclusions["sans_description"] += 1
-            continue
-
-        try:
-            offer = analyze_job(raw["description"])
-        except Exception:
-            logger.exception(
-                "Analyse échouée pour '%s' (%s), offre ignorée",
-                raw.get("job_title"), raw.get("link"),
-            )
-            exclusions["analyse_echouee"] += 1
-            continue
-
-        job_title = offer.job_title or raw.get("job_title", "")
-
-        if is_excluded(job_title):
-            exclusions["titre_exclu"] += 1
-            continue
-
-        description = raw.get("description", "")
-
-        if is_wrong_contract(job_title + " " + description):
-            exclusions["mauvais_contrat"] += 1
-            continue
-
-        location = offer.location or raw.get("location", "")
-
-        if is_outside_idf(location):
-            exclusions["hors_idf"] += 1
-            continue
-
-        link = raw.get("link", "")
-        company = offer.company or raw.get("company", "")
-
-        offer_id = firestore_store.compute_offer_id(link, job_title, company)
-        if firestore_store.offer_exists(offer_id):
-            logger.info("Offre déjà connue, non re-signalée: %s", link)
-            exclusions["deja_connue"] += 1
-            continue
-
-        scores = compute_career_score(offer, profile)
-
-        if debug and debug_count < 5:
-            _debug_print(raw, offer, scores, profile)
-            debug_count += 1
-
-        job = {
-            "company": company,
-            "job_title": job_title,
-            "location": location,
-            "link": link,
-            "source": raw.get("source", ""),
-            "salary": offer.salary or raw.get("salary", ""),
-            "description": description,
+    with ThreadPoolExecutor(max_workers=SCORING_WORKERS) as executor:
+        futures = {
+            executor.submit(_analyze_and_score, raw, profile): (offer_id, raw)
+            for offer_id, raw in to_score
         }
 
-        all_scored.append({"job": job, "scores": scores})
+        # Traitement au fil de l'eau, dans le thread principal : chaque
+        # offre est persistée dès que son score est disponible.
+        for future in as_completed(futures):
+            offer_id, raw = futures[future]
+            try:
+                offer, scores = future.result()
+            except Exception:
+                logger.exception(
+                    "Analyse échouée pour '%s' (%s), offre ignorée",
+                    raw.get("job_title"), raw.get("link"),
+                )
+                exclusions["analyse_echouee"] += 1
+                continue
 
-        if store_all or scores["total"] >= MIN_SCORE:
-            firestore_store.save_offer(job, scores)
+            # Second filet après extraction LLM : l'intitulé normalisé
+            # par le modèle peut révéler un poste hors cible.
+            job_title = offer.job_title or raw.get("job_title", "")
+            excluded = is_excluded(job_title)
 
-        if scores["total"] >= MIN_SCORE:
-            scored_jobs.append({"job": job, "scores": scores})
-        else:
-            exclusions["sous_seuil"] += 1
+            if debug and debug_count < 5 and not excluded:
+                _debug_print(raw, offer, scores, profile)
+                debug_count += 1
+
+            link = raw.get("link", "")
+            job = {
+                "company": offer.company or raw.get("company", ""),
+                "job_title": job_title,
+                "location": offer.location or raw.get("location", ""),
+                "link": link,
+                "source": raw.get("source", ""),
+                "salary": offer.salary or raw.get("salary", ""),
+                "description": raw.get("description", ""),
+            }
+
+            try:
+                # Mémorisée même si exclue ou sous MIN_SCORE : son analyse
+                # a déjà été payée, inutile de la refaire la semaine
+                # prochaine.
+                firestore_store.mark_seen(offer_id, link, scores["total"])
+                if not excluded and (store_all or scores["total"] >= MIN_SCORE):
+                    firestore_store.save_offer(job, scores, offer_id=offer_id)
+            except Exception:
+                logger.exception("Firestore: échec de l'écriture de %s", offer_id)
+
+            if excluded:
+                exclusions["titre_exclu"] += 1
+                continue
+
+            all_scored.append({"job": job, "scores": scores})
+
+            if scores["total"] >= MIN_SCORE:
+                scored_jobs.append({"job": job, "scores": scores})
+            else:
+                exclusions["sous_seuil"] += 1
 
     scored_jobs.sort(key=lambda entry: entry["scores"]["total"], reverse=True)
 
