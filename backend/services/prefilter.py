@@ -7,8 +7,10 @@ Ne travaille que sur les champs bruts normalisés par sources/*.py
 font sur le texte normalisé (scoring.normalize : sans casse, accents ni
 ponctuation) et par mot entier, pour que "LIMS" ne matche pas "limsoft".
 
-En cas d'information absente (lieu vide, type de contrat inconnu), l'offre
-est conservée : on ne rejette que sur un signal explicite.
+Type de contrat inconnu : l'offre est conservée (la plupart des CDI ne le
+précisent pas). Lieu vide ou vague ("France", "Non précisée") : considéré
+hors Île-de-France, donc conservé seulement si la description mentionne le
+télétravail.
 """
 
 import re
@@ -28,7 +30,14 @@ CONTRATS_EXCLUS = [
     "alternance", "apprentissage", "stage", "internship",
 ]
 
-# Comparés à l'intitulé, quand la source ne renseigne pas le contrat.
+# Recherchés dans l'intitulé ET la description : contrats hors CDI que les
+# offres mentionnent souvent en toutes lettres.
+CONTRATS_EXCLUS_TEXTE = [
+    "cdd", "freelance", "interim", "portage salarial",
+]
+
+# Comparés à l'intitulé seul (dans une description, "stage" ou
+# "alternance" peuvent apparaître sans concerner le poste).
 CONTRATS_EXCLUS_TITRE = [
     "cdd", "interim", "alternance", "alternant", "alternante",
     "apprenti", "apprentie", "apprentissage", "stage", "stagiaire",
@@ -50,9 +59,6 @@ TELETRAVAIL = ["teletravail", "remote", "travail a distance"]
 # Travail, "Nanterre (92)" chez Indeed) ou en code postal ("92000").
 _IDF_DEPARTEMENTS = re.compile(r"\b(75|77|78|91|92|93|94|95)(\d{3})?\b")
 _IDF_LIBELLES = ["ile de france", "paris", "idf"]
-
-# Lieux trop vagues pour conclure (souvent des offres à distance).
-_LIEUX_INCONNUS = {"", "france"}
 
 
 def _contains_word(text: str, terms: list[str]) -> str | None:
@@ -81,15 +87,15 @@ def rejection_reason(raw: dict) -> str | None:
 
     title = normalize(raw.get("job_title") or "")
     contract = normalize(raw.get("contract_type") or "")
-    if _contains_word(contract, CONTRATS_EXCLUS) or _contains_word(title, CONTRATS_EXCLUS_TITRE):
+    if (
+        _contains_word(contract, CONTRATS_EXCLUS)
+        or _contains_word(title, CONTRATS_EXCLUS_TITRE)
+        or _contains_word(f"{title} {description}", CONTRATS_EXCLUS_TEXTE)
+    ):
         return MOTIF_CONTRAT
 
     location = normalize(raw.get("location") or "")
-    if (
-        location not in _LIEUX_INCONNUS
-        and not _is_idf(location)
-        and not _contains_word(description, TELETRAVAIL)
-    ):
+    if not _is_idf(location) and not _contains_word(description, TELETRAVAIL):
         return MOTIF_LIEU
 
     if _contains_word(f"{title} {description}", MOTS_CLES_ELIMINATOIRES):

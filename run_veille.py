@@ -66,6 +66,14 @@ DEFAULT_KEYWORDS = [
     "BI",
     "S&OP",
     "prévisions",
+    "market intelligence analyst",
+    "business intelligence analyst",
+    "sales & market analyst",
+    "commercial analyst",
+    "insights & analytics analyst",
+    "market data analyst",
+    "performance analyst",
+    "commercial intelligence analyst",
 ]
 
 MIN_SCORE = int(os.getenv("MIN_SCORE", 60))
@@ -312,6 +320,9 @@ def run(
     scored_jobs = []
     all_scored = []
     debug_count = 0
+    # Exclusions après analyse LLM (celles d'avant sont journalisées par
+    # _select_offers_to_score).
+    exclusions = Counter()
 
     with ThreadPoolExecutor(max_workers=SCORING_WORKERS) as executor:
         futures = {
@@ -330,6 +341,7 @@ def run(
                     "Analyse échouée pour '%s' (%s), offre ignorée",
                     raw.get("job_title"), raw.get("link"),
                 )
+                exclusions["analyse_echouee"] += 1
                 continue
 
             # Second filet après extraction LLM : l'intitulé normalisé
@@ -363,12 +375,15 @@ def run(
                 logger.exception("Firestore: échec de l'écriture de %s", offer_id)
 
             if excluded:
+                exclusions["titre_exclu"] += 1
                 continue
 
             all_scored.append({"job": job, "scores": scores})
 
             if scores["total"] >= MIN_SCORE:
                 scored_jobs.append({"job": job, "scores": scores})
+            else:
+                exclusions["sous_seuil"] += 1
 
     scored_jobs.sort(key=lambda entry: entry["scores"]["total"], reverse=True)
 
@@ -381,6 +396,10 @@ def run(
         "Run terminé : %d offre(s) retenue(s) (email) sur %d collectée(s), "
         "%d scorée(s) au total",
         len(scored_jobs), len(raw_jobs), len(all_scored),
+    )
+    logger.info(
+        "Détail des exclusions : %s",
+        ", ".join(f"{motif}={count}" for motif, count in exclusions.items() if count),
     )
 
     return all_scored
