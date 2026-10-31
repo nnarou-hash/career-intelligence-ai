@@ -35,4 +35,8 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           REPORT_RECIPIENT: ${{ secrets.REPORT_RECIPIENT }}
+          # Réglages non secrets, surchargeables via Settings > Variables
+          # (vars) du dépôt ; valeurs par défaut sinon.
+          MAX_OFFRES_SCOREES: ${{ vars.MAX_OFFRES_SCOREES || '150' }}
+          APIFY_BUDGET_MINUTES: ${{ vars.APIFY_BUDGET_MINUTES || '8' }}
         run: python run_veille.py

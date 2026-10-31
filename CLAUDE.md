@@ -14,11 +14,17 @@ Deux modes coexistent et partagent le même cœur de scoring :
 
 ```
 GitHub Actions (cron samedi)
+  en parallèle, un thread par source :
   Apify -> LinkedIn        (backend/sources/apify_linkedin.py)
   Apify -> Indeed          (backend/sources/apify_indeed.py)
   France Travail (OAuth2)  (backend/sources/france_travail.py)
         v
-  backend/services/job_analyzer.py   (extraction structurée via OpenAI)
+  backend/services/prefilter.py      (rejets déterministes, sans OpenAI)
+        v
+  dédoublonnage contre Firestore + plafond MAX_OFFRES_SCOREES (150)
+        v
+  backend/services/job_analyzer.py   (OpenAI, json_schema strict,
+                                      6 workers, retry sur 429)
         v
   backend/scoring/career_score.py    (agrégation des 5 sous-scores)
         v
@@ -26,6 +32,11 @@ GitHub Actions (cron samedi)
         v
   backend/notify/email_report.py (Gmail SMTP) + public/index.html (Firebase Hosting)
 ```
+
+Chaque offre est écrite dans Firestore dès qu'elle est scorée (un run
+coupé par le timeout garde ce qui est fait). Chaque actor Apify a un budget
+total `APIFY_BUDGET_MINUTES` (8 par défaut) partagé entre ses mots-clés ;
+une fois épuisé, ses mots-clés restants sont sautés.
 
 Chaque source de `backend/sources/` est isolée : si elle n'est pas
 configurée (variables d'environnement absentes) ou si l'appel échoue, elle
@@ -66,11 +77,19 @@ rebrancher explicitement si ce bonus doit revenir.
 ## Dédoublonnage
 
 Identifiant stable : `SHA1(url + titre + entreprise)`, tout en minuscules
-(`backend/storage/firestore_store.compute_offer_id`). Une offre déjà connue
-de Firestore n'est ni re-scorée en base ni re-signalée par email la semaine
-suivante (voir `firestore_store.offer_exists`). En mode dégradé (Firestore
-non configuré), `offer_exists` renvoie toujours `False` : tout est
-re-signalé à chaque run, faute de mémoire persistante.
+(`backend/storage/firestore_store.compute_offer_id`), calculé sur les
+champs **bruts** de la source (pas ceux extraits par le LLM), pour
+dédoublonner avant tout appel OpenAI. Les ids et urls connus sont chargés
+une fois par run (`firestore_store.load_known_keys`) depuis `offres` et
+`offres_vues` ; la comparaison par url couvre les anciens documents dont
+l'id venait des champs LLM.
+
+`offres_vues` mémorise toutes les offres scorées, y compris sous
+`MIN_SCORE` (absentes de `offres`, que le tableau de bord affiche en
+entier), pour ne pas repayer leur analyse chaque semaine. Pas de règle
+Firestore : seul le compte de service y accède. En mode dégradé
+(Firestore non configuré), rien n'est connu : tout est re-scoré et
+re-signalé à chaque run.
 
 ## Conventions d'exécution (répertoire courant)
 
@@ -96,10 +115,16 @@ Voir le tableau complet livré en fin de migration. Résumé des noms :
 `APIFY_INDEED_ACTOR_ID`, `FRANCE_TRAVAIL_CLIENT_ID`,
 `FRANCE_TRAVAIL_CLIENT_SECRET`, `GOOGLE_APPLICATION_CREDENTIALS` (local) /
 `GOOGLE_APPLICATION_CREDENTIALS_JSON` (CI), `GMAIL_ADDRESS`,
-`GMAIL_APP_PASSWORD`, `REPORT_RECIPIENT`.
+`GMAIL_APP_PASSWORD`, `REPORT_RECIPIENT`. Réglages non secrets (GitHub
+`vars`, défauts dans le code) : `MAX_OFFRES_SCOREES`, `APIFY_BUDGET_MINUTES`,
+`SCORING_WORKERS`, `MIN_SCORE`.
 
 ## Points connus, à surveiller
 
+- `contract_type` lu sur les items Apify (`jobType` Indeed,
+  `employmentType` LinkedIn) est une hypothèse de nom de champ, comme le
+  reste du schéma de sortie ; s'il est absent, le pré-filtre se rabat sur
+  l'intitulé.
 - Les identifiants d'actor Apify (`DEFAULT_ACTOR_ID` dans
   `apify_linkedin.py` / `apify_indeed.py`) et les noms de champs lus sur les
   items retournés sont des hypothèses à vérifier contre l'actor réellement

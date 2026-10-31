@@ -3,6 +3,7 @@ apify_linkedin.py et apify_indeed.py, sans dupliquer la logique d'appel."""
 
 import logging
 import os
+import time
 from datetime import timedelta
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,28 @@ logger = logging.getLogger(__name__)
 # run comme non terminé et on l'ignore (voir vérification du statut plus
 # bas), sans jamais bloquer tout le pipeline.
 WAIT_DURATION = timedelta(minutes=5)
+
+# Budget total par actor, partagé entre tous ses mots-clés (une exécution
+# d'actor par mot-clé) : sans lui, 11 mots-clés x WAIT_DURATION pouvaient
+# occuper un actor lent pendant ~55 min. Une fois épuisé, les mots-clés
+# restants de cet actor sont sautés ; les autres sources ne sont pas
+# affectées (elles ont leur propre budget, et run_veille les interroge en
+# parallèle).
+APIFY_BUDGET_MINUTES = float(os.getenv("APIFY_BUDGET_MINUTES", 8))
+
+# En dessous de ce temps restant, un nouveau run n'aurait pas le temps
+# d'aboutir : inutile de le lancer (et de le payer).
+MIN_REMAINING = timedelta(seconds=30)
+
+
+def start_budget() -> float:
+    """Échéance (time.monotonic) du budget APIFY_BUDGET_MINUTES d'un actor,
+    à passer à run_apify_actor / budget_remaining."""
+    return time.monotonic() + APIFY_BUDGET_MINUTES * 60
+
+
+def budget_remaining(deadline: float) -> timedelta:
+    return timedelta(seconds=max(0.0, deadline - time.monotonic()))
 
 
 def _champ(run, *noms):
@@ -29,8 +52,17 @@ def _champ(run, *noms):
     return None
 
 
-def run_apify_actor(actor_id: str, run_input: dict, token_env_var: str = "APIFY_TOKEN") -> list[dict]:
+def run_apify_actor(
+    actor_id: str,
+    run_input: dict,
+    token_env_var: str = "APIFY_TOKEN",
+    deadline: float | None = None,
+) -> list[dict]:
     """Lance un actor Apify et renvoie les items de son dataset par défaut.
+
+    `deadline` (voir start_budget) borne l'attente à ce qu'il reste du
+    budget de l'actor, et arrête aussi le run côté Apify (run_timeout) pour
+    qu'il ne continue pas à consommer du crédit après qu'on l'a abandonné.
 
     Ne lève jamais d'exception : si le token n'est pas configuré, si le
     paquet apify-client n'est pas installé, ou si l'appel échoue, renvoie
@@ -49,16 +81,28 @@ def run_apify_actor(actor_id: str, run_input: dict, token_env_var: str = "APIFY_
         logger.warning("Le paquet apify-client n'est pas installé — source ignorée")
         return []
 
+    wait = WAIT_DURATION
+    if deadline is not None:
+        wait = min(WAIT_DURATION, budget_remaining(deadline))
+        if wait < MIN_REMAINING:
+            logger.warning(
+                "Apify: budget de %s min épuisé pour l'actor %s — run non lancé",
+                APIFY_BUDGET_MINUTES, actor_id,
+            )
+            return []
+
     try:
         client = ApifyClient(token)
-        run = client.actor(actor_id).call(run_input=run_input, wait_duration=WAIT_DURATION)
+        run = client.actor(actor_id).call(
+            run_input=run_input, wait_duration=wait, run_timeout=wait
+        )
 
         status = _champ(run, "status")
         if status and status != "SUCCEEDED":
             logger.warning(
                 "Apify: run de l'actor %s toujours à '%s' après %s — dataset ignoré "
                 "(quota dépassé, run lent, ou bloqué)",
-                actor_id, status, WAIT_DURATION,
+                actor_id, status, wait,
             )
             return []
 
